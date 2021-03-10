@@ -17,7 +17,17 @@ signal Sreg: Sreg_type:=a0;
 
 begin
 
-process(clock)
+systemReset: process(clock)
+    begin
+        if(rising_edge(clock)) then
+            if(button(0) = '1') then
+                Sreg <= a0;
+            end if;
+        end if;
+end process;
+
+
+main: process(clock)
 	begin
 		if(rising_edge(clock)) then
 			case Sreg is
