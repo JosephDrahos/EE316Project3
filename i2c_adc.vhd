@@ -1,6 +1,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
-use ieee.numeric_std;
+use ieee.numeric_std.all;
 
 entity i2c_adc is
 	Generic (slave_addr : std_logic_vector(6 downto 0) := "1110010");
@@ -33,8 +33,8 @@ component i2c_master is
     scl       : INOUT  STD_LOGIC);                   --serial clock output of i2c bus
 END component i2c_master;
 
-type state_type is (start,write,read);
-signal state : state_type := start;
+type state_type is (initial,write,read);
+signal state : state_type := initial;
 signal count : integer := 0;
 signal maxcount : integer := 3000;
 signal i2c_datawr : std_logic_vector(7 downto 0);
@@ -47,7 +47,8 @@ signal SDAbuf, SCLbuf : std_logic;
 signal data_rdbuf : std_logic_vector(7 downto 0);
 signal ackbuf : std_logic;
 signal configprev : std_logic_vector(7 downto 0);
-
+signal byteSel : integer := 0;
+signal MaxByte : integer := 9;
 begin	
 
 i2c_addr <= "1001000";
@@ -67,24 +68,37 @@ port map(
 	scl=>SCLbuf
 );
 
+ChangeState: process(byteSel,clk)
+	begin	
+		case byteSel is
+			when 0  => i2c_datawr <= X"76";
+			when 1  => i2c_datawr <= X"76";
+			when 2  => i2c_datawr <= X"76";
+			when 3  => i2c_datawr <= X"7A";
+			when 4  => i2c_datawr <= X"FF";
+			when 5  => i2c_datawr <= X"77";
+			when 6  => i2c_datawr <= X"00";
+			when 7  => i2c_datawr <= X"79";
+			when 8  => i2c_datawr <= X"00";
+			when 9  => i2c_datawr <= config;
+			when others => i2c_datawr <= X"76";
+		end case;
 
-process(clk)
+end process;
+
+process(clk, byteSel)
 begin
     if rising_edge(clk) then
         configprev <= config;
         busyprev <= busy;
     end if;
-end process;
-
-process(clk)
-begin
 	if(clk'EVENT AND clk = '1')then
 		CASE state is
-		when start =>
+		when initial =>
 			if count /= maxcount THEN
 				count <= count-1;
 				reset_n <= '0';
-				state <= start;
+				state <= initial;
 				i2c_en <= '0';
 			else
 			    count <= 0;	
@@ -98,12 +112,16 @@ begin
 		when write =>
             if busy = '0' and busyprev = '1' then
                 i2c_rw <= '1';
+                if byteSel /= Maxbyte then
+                    byteSel <= byteSel + 1;
+                else
+                    byteSel <= 9;
+                end if;
                 state <= read;
+                
             end if;
---          if i2c_addr = '1111111' then
---              i2c_addr <= "1001000";
---          end if; 
---          i2c_addr <= to_integer(unsigned(i2c_addr) + 1);		
+            
+	
 		when read =>
             if configprev = config then
                 dataready <= '0';
@@ -112,9 +130,10 @@ begin
                     dataready <= '1';
                 end if;
             else
-                state <= start;
+                state <= initial;
             end if;
-	end case;
+
+    	end case;
 	end if;
 	
 	SDA <= SDAbuf;
