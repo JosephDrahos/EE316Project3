@@ -7,7 +7,9 @@ entity i2c_adc is
 	PORT(
         clk         : in std_logic;
         config      : in std_logic_vector(7 downto 0);
-        SDA, SCL    : inout std_logic;
+        in_address  : in std_logic_vector(6 downto 0);
+        SDA         : inout std_logic;
+        SCL         : inout std_logic;
         data_rd     : out std_logic_vector(7 downto 0);
         dataready   : out std_logic
 	);
@@ -17,8 +19,8 @@ architecture behavioral of i2c_adc is
 
 component i2c_master is
   GENERIC(
-    input_clk : INTEGER := 100_000_000; --input clock speed from user logic in Hz
-    bus_clk   : INTEGER := 400_000);   --speed the i2c bus (scl) will run at in Hz
+    input_clk : INTEGER := 125_000_000; --input clock speed from user logic in Hz
+    bus_clk   : INTEGER := 100_000);   --speed the i2c bus (scl) will run at in Hz
   PORT(
     clk       : IN     STD_LOGIC;                    --system clock
     reset_n   : IN     STD_LOGIC;                    --active low reset
@@ -51,7 +53,7 @@ signal byteSel : integer := 0;
 signal MaxByte : integer := 9;
 begin	
 
-i2c_addr <= "1001000";
+
 
 output: i2c_master
 port map(
@@ -68,31 +70,15 @@ port map(
 	scl=>SCLbuf
 );
 
-ChangeState: process(byteSel,clk)
-	begin	
-		case byteSel is
-			when 0  => i2c_datawr <= X"76";
-			when 1  => i2c_datawr <= X"76";
-			when 2  => i2c_datawr <= X"76";
-			when 3  => i2c_datawr <= X"7A";
-			when 4  => i2c_datawr <= X"FF";
-			when 5  => i2c_datawr <= X"77";
-			when 6  => i2c_datawr <= X"00";
-			when 7  => i2c_datawr <= X"79";
-			when 8  => i2c_datawr <= X"00";
-			when 9  => i2c_datawr <= config;
-			when others => i2c_datawr <= X"76";
-		end case;
 
-end process;
-
-process(clk, byteSel)
+process(clk)
 begin
     if rising_edge(clk) then
         configprev <= config;
         busyprev <= busy;
     end if;
 	if(clk'EVENT AND clk = '1')then
+		i2c_addr <= in_address;
 		CASE state is
 		when initial =>
 			if count /= maxcount THEN
@@ -105,6 +91,7 @@ begin
 				reset_n <= '1';
 				i2c_en <= '1';
 				i2c_rw <= '0';
+				i2c_addr <= "1001000";
 				i2c_datawr <= config;
 				state <= write;
 			END IF;
@@ -112,13 +99,7 @@ begin
 		when write =>
             if busy = '0' and busyprev = '1' then
                 i2c_rw <= '1';
-                if byteSel /= Maxbyte then
-                    byteSel <= byteSel + 1;
-                else
-                    byteSel <= 9;
-                end if;
                 state <= read;
-                
             end if;
             
 	
